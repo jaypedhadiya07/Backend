@@ -239,7 +239,6 @@ const refreshAccessToken = asynchandler(async (req, res) => {
 });
 
 const changePassword = asynchandler(async (req, res) => {
-  console.log(req.user._id);
   const { oldPassword, newPassword } = req.body;
   if (!oldPassword || !newPassword) {
     throw new ApiError(400, "All fields are required");
@@ -254,18 +253,26 @@ const changePassword = asynchandler(async (req, res) => {
 
   const user = await User.findById(req.user?._id);
 
-  console.log(user);
-
   if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const isOldPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+  if (!isOldPasswordCorrect) {
     throw new ApiError(404, "Invalid Old Password");
   }
 
   user.password = newPassword;
   await user.save();
 
+  const afterUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
   return res
     .status(200)
-    .json(new ApiError(200, {}, "Password changed successfully"));
+    .json(new ApiResponse(200, afterUser, "Password changed successfully"));
 });
 
 const getCurrentUser = asynchandler(async (req, res) => {
@@ -289,7 +296,7 @@ const updateAccountDetails = asynchandler(async (req, res) => {
     throw new ApiError(400, "All fields are required");
   }
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user._id,
     {
       $set: {
@@ -312,7 +319,7 @@ const updateAvatarImage = asynchandler(async (req, res) => {
     throw new ApiError(400, "Cover image is required");
   }
 
-  const avatar = uploadOnCloudinary(avatarImageLocalPath);
+  const avatar = await uploadOnCloudinary(avatarImageLocalPath);
 
   if (!avatar.url) {
     throw new ApiError(400, "Error uploading avatar image");
@@ -339,7 +346,7 @@ const updateCoverImage = asynchandler(async (req, res) => {
     throw new ApiError(400, "Cover image is required");
   }
 
-  const cover = uploadOnCloudinary(coverImageLocalPath);
+  const cover = await uploadOnCloudinary(coverImageLocalPath);
 
   if (!cover.url) {
     throw new ApiError(400, "Error uploading cover image");
@@ -349,7 +356,7 @@ const updateCoverImage = asynchandler(async (req, res) => {
     req.user?._id,
     {
       $set: {
-        cover: cover.url,
+        coverImage: cover.url,
       },
     },
     { new: true }
@@ -455,27 +462,33 @@ const getWatchHistory = asynchandler(async (req, res) => {
                   $project: {
                     fullName: 1,
                     userName: 1,
-                    avatar: 1
-                  }
-                }
-              ]
+                    avatar: 1,
+                  },
+                },
+              ],
             },
           },
           {
             $addFields: {
               owner: {
-                $first: "$owner"
-              }
-            }
-          }
-        ]
-      }
-    }
-  ])
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
 
   return res
     .status(200)
-    .json(new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully"));
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
+    );
 });
 
 export {
@@ -489,5 +502,5 @@ export {
   updateAvatarImage,
   updateCoverImage,
   getUserChannelProfile,
-  getWatchHistory
+  getWatchHistory,
 };
