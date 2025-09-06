@@ -369,7 +369,7 @@ const updateCoverImage = asynchandler(async (req, res) => {
 const getUserChannelProfile = asynchandler(async (req, res) => {
   const { username } = req.params;
 
-  if (username?.trim()) {
+  if (!username?.trim()) {
     throw new ApiError(400, "Invalid username");
   }
 
@@ -438,11 +438,11 @@ const getUserChannelProfile = asynchandler(async (req, res) => {
 });
 
 const getWatchHistory = asynchandler(async (req, res) => {
-  const user = User.aggregate([
+  const user = await User.aggregate([
     {
       $match: {
         _id: new mongoose.Types.ObjectId(req.user?._id),
-      }
+      },
     },
     {
       $lookup: {
